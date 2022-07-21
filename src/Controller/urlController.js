@@ -69,29 +69,37 @@ const urlShorten = async function (req, res) {
 };
 
 //-------------------------getAPI
-
 const getUrl = async function (req, res) {
     try {
         let code = req.params.urlCode
         //---------------urlcode validation
 
         if (!shortId.isValid(code)) return res.status(400).send({ status: false, message: "Invalid Id" })
-        let validUrl = await urlModel.findOne({urlCode: req.params.urlCode })
+        let validUrl = await urlModel.findOne({ urlCode: req.params.urlCode })
         if (!validUrl) return res.status(404).send({ status: false, message: "URL is not present in data base" })
+        //-----------------Caching
+        let cahcedurlData = await GET_ASYNC(`${req.params.urlCode}`)
 
-        //------------------Caching
-        let casheData = await GET_ASYNC(`${code}`)
-        console.log(casheData)
-        if(casheData) return res.status(302).redirect(casheData)
-        const findURL = await urlModel.findOne({code})
-        await SET_ASYNC(`${code}`,findURL.longUrl)
-        return res.status(302).redirect(findURL.longUrl)
-       
+
+        if (cahcedurlData) {
+            console.log(cahcedurlData)
+            
+
+            res.status(302).redirect(cahcedurlData)
+        }
+
+        else {
+
+            let urlData = await urlModel.findOne({ urlCode: req.params.urlCode }, { longUrl: 1, _id: 0 });
+            await SET_ASYNC(`${req.params.urlCode}`, urlData.longUrl)
+            res.status(302).redirect(urlData.longUrl);
+
+        }
 
     } catch (err) {
+        console.log(err)
         return res.status(500).send({ status: false, error: err.message })
     }
 };
-
 //--------------------------Exports
 module.exports = { urlShorten, getUrl };
