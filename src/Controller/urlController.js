@@ -1,7 +1,6 @@
 //----------------------Imports------------------------//
 const urlModel = require("../Models/UrlModel");
 const shortId = require("shortid");
-const UrlModel = require("../Models/UrlModel");
 const validator = require("validator");
 const redis = require("redis");
 const { promisify } = require("util");
@@ -47,21 +46,15 @@ const urlShorten = async function (req, res) {
         //----------------------DB Call
 
         let urlFind = await urlModel.findOne({longUrl},{urlCode:1,longUrl:1,shortUrl:1,_id:0})
-        
-        
-       // console.log(urlFind)
-       
-        if (urlFind) return res.status(200).send({data:urlFind })
+        if (urlFind) return res.status(201).send({status:true,data:urlFind })
         const baseUrl = `${req.protocol}://${req.headers.host}`
         const urlCode = shortId.generate()
         const shortUrl = baseUrl + '/' + urlCode
-        url = new UrlModel({
-            longUrl,
-            shortUrl,
-            urlCode
-        })
+        let url= { longUrl,shortUrl, urlCode }
+        
         let result = await urlModel.create(url)
-        return res.status(201).send({ data: {urlCode:result.urlCode,longUrl:result.longUrl,shortUrl:result.shortUrl}})
+        
+        return res.status(201).send({ status: true,data: url})
 
     } catch (err) {
         res.status(500).send({ status: false, error: err.message })
@@ -69,37 +62,30 @@ const urlShorten = async function (req, res) {
 };
 
 //-------------------------getAPI
+    
 const getUrl = async function (req, res) {
     try {
         let code = req.params.urlCode
+    
         //---------------urlcode validation
 
-        if (!shortId.isValid(code)) return res.status(400).send({ status: false, message: "Invalid Id" })
-        let validUrl = await urlModel.findOne({ urlCode: req.params.urlCode })
+        if (!shortId.isValid(code)) return res.status(400).send({ status: false, message: "Invalid URLcode" })
+        let validUrl = await urlModel.findOne({urlCode: req.params.urlCode })
         if (!validUrl) return res.status(404).send({ status: false, message: "URL is not present in data base" })
-        //-----------------Caching
-        let cahcedurlData = await GET_ASYNC(`${req.params.urlCode}`)
 
-
-        if (cahcedurlData) {
-            console.log(cahcedurlData)
-            
-
-            res.status(302).redirect(cahcedurlData)
-        }
-
-        else {
-
-            let urlData = await urlModel.findOne({ urlCode: req.params.urlCode }, { longUrl: 1, _id: 0 });
-            await SET_ASYNC(`${req.params.urlCode}`, urlData.longUrl)
-            res.status(302).redirect(urlData.longUrl);
-
-        }
+        //------------------Caching
+        let casheData = await GET_ASYNC(`${req.params.urlCode}`)
+    
+        if(casheData) return res.status(302).redirect(casheData)
+        const findURL = await urlModel.findOne({urlCode: req.params.urlCode})       
+        await SET_ASYNC(`${req.params.urlCode}`,findURL.longUrl)
+        return res.status(302).redirect(findURL.longUrl)
+       
 
     } catch (err) {
-        console.log(err)
         return res.status(500).send({ status: false, error: err.message })
     }
 };
+
 //--------------------------Exports
 module.exports = { urlShorten, getUrl };
